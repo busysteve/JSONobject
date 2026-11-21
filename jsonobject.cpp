@@ -223,6 +223,27 @@ JSONobject::JSONobject()
     init();
 }
 
+JSONobject::JSONobject(Type type)
+{
+    init();
+    if (type == TypeObject) {
+        m_type = TypeObject;
+        m_value.clear();
+    } else if (type == TypeArray) {
+        m_type = TypeArray;
+        m_value.clear();
+    } else if (type == TypeString) {
+        m_type = TypeString;
+        m_value.clear();
+    } else if (type == TypeNumber) {
+        m_type = TypeNumber;
+        m_value = "0";
+    } else if (type == TypeBool) {
+        m_type = TypeBool;
+        m_value = "false";
+    }
+}
+
 JSONobject::JSONobject(const JSONobject& other)
 {
     init();
@@ -721,8 +742,53 @@ void JSONobject::ensureArray()
         return;
     }
     if (m_type != TypeArray) {
-        fail("Cannot append an element to this JSON value", m_name);
+        fail("This JSON value is not an array", m_name);
     }
+}
+
+JSONobject& JSONobject::insertAt(int index, JSONobject* child, bool ownOnFailure)
+{
+    try {
+        ensureArray();
+        if (child == NULL)
+            fail("Cannot insert a null element", "");
+        if (index < 0 || index > count())
+            fail("Index out of bounds", "");
+    } catch (...) {
+        if (ownOnFailure)
+            delete child;
+        throw;
+    }
+
+    child->m_ignoreCase = m_ignoreCase;
+    child->m_strictMode = m_strictMode;
+    child->m_name.clear();
+    child->m_parent = this;
+    m_children.insert(m_children.begin() + (std::ptrdiff_t)index, child);
+    return *child;
+}
+
+void JSONobject::destroyAt(int index)
+{
+    delete m_children[(size_t)index];
+    m_children.erase(m_children.begin() + (std::ptrdiff_t)index);
+}
+
+bool JSONobject::equalValue(const JSONobject& other) const
+{
+    if (m_type != other.m_type)
+        return false;
+    if (m_type != TypeObject && m_type != TypeArray && m_value != other.m_value)
+        return false;
+    if (m_children.size() != other.m_children.size())
+        return false;
+    for (size_t i = 0; i < m_children.size(); i++) {
+        if (m_type == TypeObject && m_children[i]->m_name != other.m_children[i]->m_name)
+            return false;
+        if (!m_children[i]->equalValue(*other.m_children[i]))
+            return false;
+    }
+    return true;
 }
 
 JSONobject& JSONobject::link(JSONobject* child)
@@ -889,92 +955,388 @@ void JSONobject::insertJSON(std::string strJSON)
 
 JSONobject& JSONobject::push()
 {
-    ensureArray();
-    JSONobject* child = new JSONobject();
-    child->m_ignoreCase = m_ignoreCase;
-    child->m_strictMode = m_strictMode;
-    child->m_type = TypeObject;
-    child->m_value.clear();
-    return link(child);
+    return insert(count());
 }
 
 JSONobject& JSONobject::pushNull()
 {
-    ensureArray();
-    JSONobject* child = new JSONobject();
-    child->setNull();
-    return link(child);
+    return insertNull(count());
 }
 
 JSONobject& JSONobject::push(const char* szValue)
 {
-    ensureArray();
-    JSONobject* child = new JSONobject();
-    child->setValue(szValue);
-    return link(child);
+    return insert(count(), szValue);
 }
 
 JSONobject& JSONobject::push(bool value)
 {
-    ensureArray();
-    JSONobject* child = new JSONobject();
-    child->setValue(value ? "true" : "false");
-    child->m_type = TypeBool;
-    return link(child);
+    return insert(count(), value);
 }
 
 JSONobject& JSONobject::push(int value)
 {
-    ensureArray();
-    JSONobject* child = new JSONobject();
-    child->setValue(value);
-    return link(child);
+    return insert(count(), value);
 }
 
 JSONobject& JSONobject::push(unsigned int value)
 {
-    ensureArray();
-    JSONobject* child = new JSONobject();
-    child->setValue(value);
-    return link(child);
+    return insert(count(), value);
 }
 
 JSONobject& JSONobject::push(float value)
 {
-    ensureArray();
-    JSONobject* child = new JSONobject();
-    child->setValue(value);
-    return link(child);
+    return insert(count(), value);
 }
 
 JSONobject& JSONobject::push(double value)
 {
-    ensureArray();
-    JSONobject* child = new JSONobject();
-    child->setValue(value);
-    return link(child);
+    return insert(count(), value);
 }
 
 JSONobject& JSONobject::push(std::string strValue)
 {
-    return push(strValue.c_str());
+    return insert(count(), strValue);
 }
 
 JSONobject& JSONobject::push(const JSONobject& other)
 {
-    ensureArray();
-    JSONobject* child = new JSONobject(other);
-    child->m_name.clear();
-    return link(child);
+    return insert(count(), other);
 }
 
 JSONobject& JSONobject::push(JSONobject* pChild)
 {
     if (pChild == NULL)
         fail("Cannot push a null child pointer", "");
+    return insert(count(), pChild);
+}
+
+JSONobject& JSONobject::pushJSON(const char* szJSON)
+{
+    return pushJSON(std::string(szJSON ? szJSON : ""));
+}
+
+JSONobject& JSONobject::pushJSON(std::string strJSON)
+{
+    return insertJSON(count(), strJSON);
+}
+
+JSONobject& JSONobject::insert(int index)
+{
+    JSONobject* child = new JSONobject();
+    child->m_type = TypeObject;
+    child->m_value.clear();
+    return insertAt(index, child, true);
+}
+
+JSONobject& JSONobject::insertNull(int index)
+{
+    JSONobject* child = new JSONobject();
+    child->setNull();
+    return insertAt(index, child, true);
+}
+
+JSONobject& JSONobject::insert(int index, const char* szValue)
+{
+    JSONobject* child = new JSONobject();
+    child->setValue(szValue);
+    return insertAt(index, child, true);
+}
+
+JSONobject& JSONobject::insert(int index, bool value)
+{
+    JSONobject* child = new JSONobject();
+    child->setValue(value ? "true" : "false");
+    child->m_type = TypeBool;
+    return insertAt(index, child, true);
+}
+
+JSONobject& JSONobject::insert(int index, int value)
+{
+    JSONobject* child = new JSONobject();
+    child->setValue(value);
+    return insertAt(index, child, true);
+}
+
+JSONobject& JSONobject::insert(int index, unsigned int value)
+{
+    JSONobject* child = new JSONobject();
+    child->setValue(value);
+    return insertAt(index, child, true);
+}
+
+JSONobject& JSONobject::insert(int index, float value)
+{
+    JSONobject* child = new JSONobject();
+    child->setValue(value);
+    return insertAt(index, child, true);
+}
+
+JSONobject& JSONobject::insert(int index, double value)
+{
+    JSONobject* child = new JSONobject();
+    child->setValue(value);
+    return insertAt(index, child, true);
+}
+
+JSONobject& JSONobject::insert(int index, std::string strValue)
+{
+    return insert(index, strValue.c_str());
+}
+
+JSONobject& JSONobject::insert(int index, const JSONobject& other)
+{
+    JSONobject* child = new JSONobject(other);
+    return insertAt(index, child, true);
+}
+
+JSONobject& JSONobject::insert(int index, JSONobject* pChild)
+{
+    if (pChild == NULL)
+        fail("Cannot insert a null element", "");
+    return insertAt(index, pChild, false);
+}
+
+JSONobject& JSONobject::insertJSON(int index, const char* szJSON)
+{
+    return insertJSON(index, std::string(szJSON ? szJSON : ""));
+}
+
+JSONobject& JSONobject::insertJSON(int index, std::string strJSON)
+{
+    JSONobject* child = new JSONobject();
+    try {
+        child->m_ignoreCase = m_ignoreCase;
+        child->m_strictMode = m_strictMode;
+        child->read(strJSON.c_str(), (int)strJSON.size());
+        if (child->incomplete())
+            fail("Incomplete JSON value", strJSON);
+    } catch (...) {
+        delete child;
+        throw;
+    }
+    return insertAt(index, child, true);
+}
+
+JSONobject& JSONobject::front() const
+{
+    return (*this)[0];
+}
+
+JSONobject& JSONobject::back() const
+{
+    if (count() == 0)
+        return (*this)[0];
+    return (*this)[count() - 1];
+}
+
+JSONobject JSONobject::pop()
+{
+    if (m_type != TypeArray)
+        fail("This JSON value is not an array", m_name);
+    if (m_children.empty())
+        fail("Cannot pop an empty array", m_name);
+
+    JSONobject* last = m_children.back();
+    m_children.pop_back();
+    JSONobject out(*last);
+    delete last;
+    return out;
+}
+
+bool JSONobject::deleteAt(int index)
+{
+    if (index < 0 || index >= count())
+        return false;
+    destroyAt(index);
+    return true;
+}
+
+bool JSONobject::deleteAt(size_t index)
+{
+    if (index >= m_children.size())
+        return false;
+    destroyAt((int)index);
+    return true;
+}
+
+void JSONobject::resize(int size)
+{
+    if (size < 0)
+        fail("Index out of bounds", "");
     ensureArray();
-    pChild->m_name.clear();
-    return link(pChild);
+    while (count() > size)
+        destroyAt(count() - 1);
+    while (count() < size)
+        pushNull();
+}
+
+void JSONobject::resize(size_t size)
+{
+    if (size > (size_t)0x7fffffff)
+        fail("Index out of bounds", "");
+    resize((int)size);
+}
+
+int JSONobject::indexOf(const char* szValue) const
+{
+    if (!isArray())
+        return -1;
+    for (int i = 0; i < count(); i++) {
+        if ((*this)[i] == szValue)
+            return i;
+    }
+    return -1;
+}
+
+int JSONobject::indexOf(const std::string& strValue) const
+{
+    return indexOf(strValue.c_str());
+}
+
+int JSONobject::indexOf(bool value) const
+{
+    if (!isArray())
+        return -1;
+    for (int i = 0; i < count(); i++) {
+        const JSONobject& element = (*this)[i];
+        if (element.isBool() && element.boolValue() == value)
+            return i;
+    }
+    return -1;
+}
+
+int JSONobject::indexOf(int value) const
+{
+    if (!isArray())
+        return -1;
+    for (int i = 0; i < count(); i++) {
+        const JSONobject& element = (*this)[i];
+        if (element.isNumber() && element.doubleValue() == (double)value)
+            return i;
+    }
+    return -1;
+}
+
+int JSONobject::indexOf(unsigned int value) const
+{
+    if (!isArray())
+        return -1;
+    for (int i = 0; i < count(); i++) {
+        const JSONobject& element = (*this)[i];
+        if (element.isNumber() && element.doubleValue() == (double)value)
+            return i;
+    }
+    return -1;
+}
+
+int JSONobject::indexOf(double value) const
+{
+    if (!isArray())
+        return -1;
+    for (int i = 0; i < count(); i++) {
+        const JSONobject& element = (*this)[i];
+        if (element.isNumber() && element.doubleValue() == value)
+            return i;
+    }
+    return -1;
+}
+
+int JSONobject::indexOf(const JSONobject& other) const
+{
+    if (!isArray())
+        return -1;
+    for (int i = 0; i < count(); i++) {
+        if ((*this)[i].equalValue(other))
+            return i;
+    }
+    return -1;
+}
+
+bool JSONobject::contains(const char* szValue) const
+{
+    return indexOf(szValue) >= 0;
+}
+
+bool JSONobject::contains(const std::string& strValue) const
+{
+    return indexOf(strValue) >= 0;
+}
+
+bool JSONobject::contains(bool value) const
+{
+    return indexOf(value) >= 0;
+}
+
+bool JSONobject::contains(int value) const
+{
+    return indexOf(value) >= 0;
+}
+
+bool JSONobject::contains(unsigned int value) const
+{
+    return indexOf(value) >= 0;
+}
+
+bool JSONobject::contains(double value) const
+{
+    return indexOf(value) >= 0;
+}
+
+bool JSONobject::contains(const JSONobject& other) const
+{
+    return indexOf(other) >= 0;
+}
+
+JSONobject& JSONobject::operator+=(const JSONobject& other)
+{
+    if (this == &other) {
+        JSONobject copy(other);
+        return (*this) += copy;
+    }
+    if (other.isArray()) {
+        ensureArray();
+        for (int i = 0; i < other.count(); i++)
+            push(other[i]);
+        return *this;
+    }
+    push(other);
+    return *this;
+}
+
+JSONobject& JSONobject::operator+=(const char* szValue)
+{
+    push(szValue);
+    return *this;
+}
+
+JSONobject& JSONobject::operator+=(const std::string& strValue)
+{
+    push(strValue);
+    return *this;
+}
+
+JSONobject& JSONobject::operator+=(bool value)
+{
+    push(value);
+    return *this;
+}
+
+JSONobject& JSONobject::operator+=(int value)
+{
+    push(value);
+    return *this;
+}
+
+JSONobject& JSONobject::operator+=(unsigned int value)
+{
+    push(value);
+    return *this;
+}
+
+JSONobject& JSONobject::operator+=(double value)
+{
+    push(value);
+    return *this;
 }
 
 bool JSONobject::has(const std::string& strName) const

@@ -98,6 +98,9 @@ private:
     bool nameEquals(const std::string& stored, const char* key) const;
 
     JSONobject& link(JSONobject* child);
+    JSONobject& insertAt(int index, JSONobject* child, bool ownOnFailure);
+    void destroyAt(int index);
+    bool equalValue(const JSONobject& other) const;
     void ensureObject();
     void ensureArray();
 
@@ -126,6 +129,13 @@ public:
     * Default constructor.  The value is null.
     */
     JSONobject();
+
+    /**
+    * Value of a given type.  TypeArray builds an empty array.
+    * TypeObject builds an empty object.  Scalars start empty:
+    * false, 0, "", or null.
+    */
+    explicit JSONobject(Type type);
 
     /**
     * Copy constructor.  Deep-copies the tree.  The copy has no parent.
@@ -400,6 +410,91 @@ public:
     JSONobject& push(std::string strValue);
     JSONobject& push(const JSONobject& other);
     JSONobject& push(JSONobject* pChild);
+
+    /**
+    * Parse one JSON value and append it.  Objects and arrays are one
+    * element, not a list of members.
+    */
+    JSONobject& pushJSON(const char* szJSON);
+    JSONobject& pushJSON(std::string strJSON);
+
+    /**
+    * Insert at a zero-based index.  An index equal to count() appends.
+    * A null value becomes an array.  insert() with only an index inserts
+    * an empty object.
+    */
+    JSONobject& insert(int index);
+    JSONobject& insertNull(int index);
+    JSONobject& insert(int index, const char* szValue);
+    JSONobject& insert(int index, bool value);
+    JSONobject& insert(int index, int value);
+    JSONobject& insert(int index, unsigned int value);
+    JSONobject& insert(int index, float value);
+    JSONobject& insert(int index, double value);
+    JSONobject& insert(int index, std::string strValue);
+    JSONobject& insert(int index, const JSONobject& other);
+    JSONobject& insert(int index, JSONobject* pChild);
+    JSONobject& insertJSON(int index, const char* szJSON);
+    JSONobject& insertJSON(int index, std::string strJSON);
+
+    /**
+    * First or last child.  Throws if this value has no children.
+    */
+    JSONobject& front() const;
+    JSONobject& back() const;
+
+    /**
+    * Remove the last array element and return a copy.  Throws if this
+    * is not a non-empty array.
+    */
+    JSONobject pop();
+
+    /**
+    * Delete the child at index.  Returns false if the index is out of
+    * range.  Works for array elements and for object members.
+    */
+    bool deleteAt(int index);
+    bool deleteAt(size_t index);
+
+    /**
+    * Grow or shrink this array.  New elements are null.  A null value
+    * becomes an array.  resize(0) leaves an empty array.
+    */
+    void resize(int size);
+    void resize(size_t size);
+
+    /**
+    * Index of the first matching array element, or -1.
+    * A number matches numerically.  A string matches element text.
+    * An object or array matches by value, ignoring the element's own name.
+    */
+    int indexOf(const char* szValue) const;
+    int indexOf(const std::string& strValue) const;
+    int indexOf(bool value) const;
+    int indexOf(int value) const;
+    int indexOf(unsigned int value) const;
+    int indexOf(double value) const;
+    int indexOf(const JSONobject& other) const;
+
+    bool contains(const char* szValue) const;
+    bool contains(const std::string& strValue) const;
+    bool contains(bool value) const;
+    bool contains(int value) const;
+    bool contains(unsigned int value) const;
+    bool contains(double value) const;
+    bool contains(const JSONobject& other) const;
+
+    /**
+    * Append a value.  Appending an array copies each of its elements.
+    * A null value becomes an array.
+    */
+    JSONobject& operator+=(const JSONobject& other);
+    JSONobject& operator+=(const char* szValue);
+    JSONobject& operator+=(const std::string& strValue);
+    JSONobject& operator+=(bool value);
+    JSONobject& operator+=(int value);
+    JSONobject& operator+=(unsigned int value);
+    JSONobject& operator+=(double value);
 
     bool has(const char* szName) const;
     bool has(const std::string& strName) const;

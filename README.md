@@ -13,6 +13,7 @@ XMLTag exports JSON. JSONobject exports XML.
     - [Example](#example)
     - [Values](#values)
     - [Building a tree](#building-a-tree)
+    - [Arrays](#arrays)
     - [Parsing](#parsing)
     - [XML export](#xml-export)
 - [License](#license)
@@ -84,7 +85,7 @@ Values
 | number | the literal | `1`, `-12.50e+1`. `intValue()`, `floatValue()`, `doubleValue()` |
 | string | quoted | `setValue("text")` or `obj = "text"` |
 | object | `{...}` | members keep insertion order. Duplicate names are kept. `operator[]` returns the first |
-| array | `[...]` | `push`, `insertJSON` |
+| array | `[...]` | `push`, `insert`, `pop`, `resize`, `indexOf`, `+=` |
 
 `operator[]` takes a name or an index. A missing name or an index that is out of range throws `JSONobjectException`. `has` and `hasPath` return false instead of throwing.
 
@@ -125,6 +126,31 @@ doc.deleteMember("ok");
 ```
 
 `add` stores a named member and turns a null value into an object. `push` appends to an array and turns a null value into an array. `addJSON(name, text)` parses one JSON value and stores it under that name. `insertJSON` parses successive values and appends each one.
+
+Arrays
+------
+
+`JSONobject(JSONobject::TypeArray)` is an empty array. `push` appends. `insert(index, value)` places an element before that index, and an index of `count()` appends. `front` and `back` throw when the array is empty. `pop` removes the last element and returns a copy. `deleteAt(index)` removes one child and returns false when the index is out of range. `resize(n)` pads with null or drops the tail.
+
+`indexOf` and `contains` search elements. Numbers match numerically, so `1` matches `1.0`. A string matches element text. An object or array matches by value and ignores the element's own name. The result is the index, or `-1`.
+
+`+=` appends one value. `+=` of another array copies each of its elements. `pushJSON` parses one JSON value, so a nested array stays one element.
+
+```c++
+JSONobject nums(JSONobject::TypeArray);
+nums.push(1);
+nums += 2;
+nums.insert(1, 9);                 // [1, 9, 2]
+nums.pushJSON("[3,4]");            // [1, 9, 2, [3, 4]]
+
+JSONobject &person = nums.push();  // append an empty object
+person.add("name", "sammy");
+
+int at = nums.indexOf(9);          // 1
+nums.deleteAt(at);
+JSONobject last = nums.pop();
+nums.resize(0);                    // []
+```
 
 Parsing
 -------

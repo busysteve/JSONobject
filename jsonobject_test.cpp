@@ -301,6 +301,118 @@ int main()
     CHECK(deep["innertag"]["child1"].value() == "sammy");
     CHECK(deep["innertag"][3].value() == "second");
 
+    JSONobject nums(JSONobject::TypeArray);
+    CHECK(nums.isArray());
+    CHECK(std::string(nums.getJSON()) == "[]");
+    nums.push(1);
+    nums += 2;
+    nums.insert(1, 9);
+    nums.pushJSON("[3,4]");
+    CHECK(std::string(nums.getJSON()) == "[1,9,2,[3,4]]");
+    CHECK(nums.front().intValue() == 1);
+    CHECK(nums.back().isArray());
+    CHECK(nums.back()[1].intValue() == 4);
+    CHECK(nums.indexOf(9) == 1);
+    CHECK(nums.contains(2));
+    CHECK(nums.indexOf(1.0) == 0);
+    CHECK(nums.indexOf("missing") == -1);
+    CHECK(!nums.contains(false));
+
+    JSONobject& person = nums.push();
+    person.add("name", "sammy");
+    person.add("age", 7);
+    JSONobject seek;
+    seek.setObject();
+    seek.add("name", "sammy");
+    seek.add("age", 7);
+    CHECK(nums.indexOf(seek) == 4);
+    CHECK(nums[4]["name"] == "sammy");
+
+    JSONobject grid(JSONobject::TypeArray);
+    JSONobject& row = grid.pushJSON("[]");
+    row.push(1);
+    row.push(2);
+    CHECK(std::string(grid.getJSON()) == "[[1,2]]");
+    CHECK(grid[0][1].intValue() == 2);
+
+    JSONobject extraRow;
+    extraRow.read("[8,9]");
+    grid.insert(0, extraRow);
+    CHECK(std::string(grid.getJSON()) == "[[8,9],[1,2]]");
+    CHECK(grid.indexOf(extraRow) == 0);
+
+    JSONobject tail = nums.pop();
+    CHECK(tail.isObject());
+    CHECK(tail["name"].value() == "sammy");
+    CHECK(nums.count() == 4);
+    CHECK(nums.deleteAt(1));
+    CHECK(std::string(nums.getJSON()) == "[1,2,[3,4]]");
+    CHECK(!nums.deleteAt(20));
+    CHECK(!nums.deleteAt(-1));
+
+    JSONobject grown(JSONobject::TypeArray);
+    grown.resize(3);
+    CHECK(std::string(grown.getJSON()) == "[null,null,null]");
+    grown.resize(1);
+    CHECK(std::string(grown.getJSON()) == "[null]");
+    grown.resize(0);
+    CHECK(grown.isArray());
+    CHECK(std::string(grown.getJSON()) == "[]");
+
+    JSONobject blank(JSONobject::TypeArray);
+    JSONobject joined;
+    joined += blank;
+    CHECK(joined.isArray());
+    CHECK(joined.count() == 0);
+    joined += nums;
+    CHECK(std::string(joined.getJSON()) == std::string(nums.getJSON()));
+    nums.push(5);
+    CHECK(!joined.contains(5));
+
+    JSONobject doubled(JSONobject::TypeArray);
+    doubled.push(1);
+    doubled += doubled;
+    CHECK(std::string(doubled.getJSON()) == "[1,1]");
+
+    bool arrayThrew = false;
+    try {
+        grown.pop();
+    } catch (const JSONobjectException&) {
+        arrayThrew = true;
+    }
+    CHECK(arrayThrew);
+
+    arrayThrew = false;
+    try {
+        nums.insert(99, 1);
+    } catch (const JSONobjectException&) {
+        arrayThrew = true;
+    }
+    CHECK(arrayThrew);
+
+    JSONobject notArray("obj");
+    notArray.add("a", 1);
+    notArray.add("b", 2);
+    CHECK(notArray.deleteAt(0));
+    CHECK(!notArray.has("a"));
+    CHECK(notArray["b"].intValue() == 2);
+    arrayThrew = false;
+    try {
+        notArray.push(3);
+    } catch (const JSONobjectException&) {
+        arrayThrew = true;
+    }
+    CHECK(arrayThrew);
+    CHECK(notArray.indexOf(2) == -1);
+
+    JSONobject owned(JSONobject::TypeArray);
+    JSONobject* heapChild = new JSONobject();
+    heapChild->setValue(4);
+    owned.insert(0, heapChild);
+    CHECK(owned[0].intValue() == 4);
+    CHECK(std::string(owned.getXML()) ==
+            "<json type=\"array\"><item type=\"number\">4</item></json>");
+
     if (g_fails) {
         std::fprintf(stderr, "%d failed\n", g_fails);
         return 1;
